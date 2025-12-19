@@ -130,7 +130,7 @@ find_pkg_date() {
   local pkg="$1"
   local i DATE
   
-  log_info "Searching for $pkg in recent builds..."
+  log_info "Searching for $pkg in recent builds..." >&2
   
   for i in {0..6}; do
     DATE=$(date -u -d "-$i day" +"%Y-%m-%d")
