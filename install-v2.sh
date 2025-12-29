@@ -22,6 +22,8 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 ##############################################
 # 0) Require root
 ##############################################
@@ -111,7 +113,41 @@ fi
 log_info "Architecture: $ARCH"
 
 ##############################################
-# 3) Package names
+# 3) Optional local dashboard package
+##############################################
+DASHBOARD_LOCAL_PKG=""
+
+echo
+read -r -p "Install Wazuh Dashboard from a local package next to install-v2.sh? [y/N]: " USE_LOCAL_DASHBOARD
+if [[ "$USE_LOCAL_DASHBOARD" =~ ^[Yy]$ ]]; then
+  if [[ "$PKG_TYPE" == "rpm" ]]; then
+    DASHBOARD_GLOB="$SCRIPT_DIR/wazuh-dashboard*.rpm"
+  else
+    DASHBOARD_GLOB="$SCRIPT_DIR/wazuh-dashboard*.deb"
+  fi
+
+  shopt -s nullglob
+  matches=( $DASHBOARD_GLOB )
+  shopt -u nullglob
+
+  if [[ ${#matches[@]} -eq 0 ]]; then
+    log_error "No local Wazuh Dashboard package found matching: $DASHBOARD_GLOB"
+    exit 1
+  fi
+
+  for f in "${matches[@]}"; do
+    if [[ "$f" == *"$ARCH"* ]]; then
+      DASHBOARD_LOCAL_PKG="$f"
+      break
+    fi
+  done
+  [[ -z "$DASHBOARD_LOCAL_PKG" ]] && DASHBOARD_LOCAL_PKG="${matches[0]}"
+
+  log_info "Using local Wazuh Dashboard package: $DASHBOARD_LOCAL_PKG"
+fi
+
+##############################################
+# 4) Package names
 ##############################################
 if [[ "$PKG_TYPE" == "rpm" ]]; then
   INDEXER_PKG="wazuh-indexer-${VERSION}-latest.${ARCH}.rpm"
@@ -123,8 +159,12 @@ else
   DASHBOARD_PKG="wazuh-dashboard_${VERSION}-latest_${ARCH}.deb"
 fi
 
+if [[ -n "$DASHBOARD_LOCAL_PKG" ]]; then
+  DASHBOARD_PKG="$DASHBOARD_LOCAL_PKG"
+fi
+
 ##############################################
-# 4) Download functions
+# 5) Download functions
 ##############################################
 find_pkg_date() {
   local pkg="$1"
@@ -182,7 +222,7 @@ if [[ "$DOWNLOAD_PKGS" == true ]]; then
 fi
 
 ##############################################
-# 5) Installation functions
+# 6) Installation functions
 ##############################################
 GENERATE_CERTS=false
 
@@ -346,14 +386,14 @@ install_pkg() {
 }
 
 ##############################################
-# 6) Install components
+# 7) Install components
 ##############################################
 install_pkg "$INDEXER_PKG" "wazuh-indexer"
 install_pkg "$MANAGER_PKG" "wazuh-manager"
 install_pkg "$DASHBOARD_PKG" "wazuh-dashboard"
 
 ##############################################
-# 7) All in one configuration
+# 8) All in one configuration
 ##############################################
 echo
 log_info "Configuring all services..."
@@ -448,7 +488,7 @@ if [[ -f /etc/wazuh-dashboard/opensearch_dashboards.yml && -d /etc/wazuh-indexer
 fi
 
 ##############################################
-# 8) Display summary
+# 9) Display summary
 ##############################################
 echo
 echo "===================================================="
